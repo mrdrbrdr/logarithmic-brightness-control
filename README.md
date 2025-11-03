@@ -1,13 +1,13 @@
 # Logarithmic Brightness Control
 
-Advanced screen brightness control for Hyprland/Omarchy with logarithmic scaling for ultra-low brightness levels. Scale down to 1/400 of maximum brightness (0.25%) for comfortable late-night computing.
+This is my small contribution to the [Omarchy](https://omarchy.org/) community. 
+
+Advanced screen brightness control for Omarchy with logarithmic scaling for ultra-low brightness levels. 
 
 ## Features
 
-- **Ultra-Low Brightness**: Down to 1/400 of max brightness (0.25%)
 - **Logarithmic Scaling**: Fine 1% steps in the 0-5% range
 - **Standard Steps**: 5% increments from 5-100%
-- **OSD Feedback**: Visual progress bar without system interference
 
 ## How It Works
 
@@ -56,18 +56,6 @@ bindeld = ,XF86MonBrightnessUp, Logarithmic brightness up, exec, ~/.local/bin/br
 bindeld = ,XF86MonBrightnessDown, Logarithmic brightness down, exec, ~/.local/bin/brightness-control down
 ```
 
-## Usage
-
-Use your brightness keys (Fn+F2/F3):
-- **F3**: Increase brightness
-- **F2**: Decrease brightness
-
-Or run directly:
-```bash
-brightness-control up
-brightness-control down
-```
-
 ## How It Works
 
 **The swayosd Problem**: `swayosd-client --brightness X` actively sets hardware brightness to X%, overriding logarithmic values.
@@ -80,11 +68,3 @@ brightness-control down
 3. Find next/previous target based on current brightness
 4. Apply with `brightnessctl`
 5. Display custom OSD with mapped percentage
-
-## License
-
-MIT License
-
----
-
-Part of the [Omarchy](https://omarchy.org/) configuration collection.
