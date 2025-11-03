@@ -1,0 +1,110 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Advanced Logarithmic Brightness Control (Added: Aug 18, 2025)
+# Provides fine-grained control in 0-5% range with logarithmic scaling
+# Maintains standard 5% increments from 5-100%
+# Solves swayosd interference by using custom progress display
+
+# Usage: brightness-control up|down
+action="${1:-}"
+
+# Current + max (raw)
+current=$(brightnessctl get)
+max=$(brightnessctl max)
+
+# OSD monitor selection (as in your config)
+osdclient="swayosd-client --monitor $(hyprctl monitors -j | jq -r '.[] | select(.focused == true).name')"
+
+# Build the target ladder in PERCENT, then map to RAW.
+# Low-end special steps: 0%,1%,2%,3%,4%,5%, then every 5%: 10..100
+# This creates the logarithmic scaling for fine control at low brightness
+targets_pct=(0 1 2 3 4 5 10 15 20 25 30 35 40 45 50 55 60 65 70 75 80 85 90 95 100)
+
+raw_targets=()
+
+for p in "${targets_pct[@]}"; do
+  # Round to nearest raw: (max*p + 50) // 100
+  raw=$(( (max * p + 50) / 100 ))
+
+  # Enforce logarithmic low-end values exactly (independent of max):
+  # These provide exponential spacing for fine control in dark environments
+  case "$p" in
+    0)  raw=0 ;;  # Completely black screen
+    1)  raw=1 ;;  # Absolute minimum visible light
+    2)  raw=2 ;;  # 
+    3)  raw=4 ;;  # Logarithmic progression
+    4)  raw=9 ;;  # continues to 5%
+    # 5% uses calculated value (e.g., 20 if max=400), then normal increments
+  esac
+
+  # Clamp and ensure strictly increasing sequence (dedup if rounding collides)
+  (( raw < 0 )) && raw=0
+  (( raw > max )) && raw="$max"
+  if ((${#raw_targets[@]}==0)) || (( raw > raw_targets[-1] )); then
+    raw_targets+=("$raw")
+  fi
+done
+
+# Find next step given current raw
+next="$current"
+if [[ "$action" == "up" ]]; then
+  for t in "${raw_targets[@]}"; do
+    if (( t > current )); then
+      next="$t"
+      break
+    fi
+  done
+elif [[ "$action" == "down" ]]; then
+  for ((i=${#raw_targets[@]}-1; i>=0; i--)); do
+    t=${raw_targets[$i]}
+    if (( t < current )); then
+      next="$t"
+      break
+    fi
+  done
+else
+  echo "Usage: $0 up|down" >&2
+  exit 1
+fi
+
+# Apply
+brightnessctl set "$next" >/dev/null
+
+# OSD (show percent of the *new* raw)
+# Map ALL brightness values to their intended display percentages
+case "$next" in
+  0)   new_percent=0 ;;
+  1)   new_percent=1 ;;
+  2)   new_percent=2 ;;
+  4)   new_percent=3 ;;
+  9)   new_percent=4 ;;
+  20)  new_percent=5 ;;
+  40)  new_percent=10 ;;
+  60)  new_percent=15 ;;
+  80)  new_percent=20 ;;
+  100) new_percent=25 ;;
+  120) new_percent=30 ;;
+  140) new_percent=35 ;;
+  160) new_percent=40 ;;
+  180) new_percent=45 ;;
+  200) new_percent=50 ;;
+  220) new_percent=55 ;;
+  240) new_percent=60 ;;
+  260) new_percent=65 ;;
+  280) new_percent=70 ;;
+  300) new_percent=75 ;;
+  320) new_percent=80 ;;
+  340) new_percent=85 ;;
+  360) new_percent=90 ;;
+  380) new_percent=95 ;;
+  400) new_percent=100 ;;
+  *)   new_percent=$(( next * 100 / max )) ;;  # fallback for any other values
+esac
+
+# Use custom progress to show bar without swayosd overriding our brightness
+# CRITICAL: swayosd-client --brightness X actively sets brightness to X% of max,
+# overriding our logarithmic values. --custom-progress displays without interference.
+# Convert percentage to 0.0-1.0 range for progress bar
+progress=$(printf "%.2f" "$(echo "$new_percent" | awk '{print $1/100}')")
+$osdclient --custom-progress="$progress" --custom-progress-text="${new_percent}%" --custom-icon="display-brightness-symbolic"
